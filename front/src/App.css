@@ -1,0 +1,92 @@
+.app {
+  display: flex;
+  width: 100%;
+  height: 100svh;
+  overflow: hidden;
+}
+
+.canvas-area {
+  flex: 1;
+  min-width: 0;
+  padding: 1.25rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.digits-panel {
+  --panel-width: 34rem;
+  width: var(--panel-width);
+  flex-shrink: 0;
+  padding: 1.5rem 1.25rem;
+  border-left: 1px solid var(--border);
+  background: var(--surface);
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 1rem;
+}
+
+.panel-title {
+  margin: 0;
+  font-size: 0.75rem;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+}
+
+.digits-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: row;
+  gap: 0.5rem;
+}
+
+.digit-item {
+  flex: 1;
+  aspect-ratio: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 0;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  background: var(--surface-raised);
+  color: var(--text);
+  font-size: 1.25rem;
+  font-weight: 500;
+  font-variant-numeric: tabular-nums;
+  transition:
+    background 0.15s ease,
+    border-color 0.15s ease,
+    color 0.15s ease;
+}
+
+.digit-item:hover {
+  background: var(--surface-hover);
+  border-color: var(--border-strong);
+  color: var(--text-bright);
+}
+
+@media (max-width: 900px) {
+  .app {
+    flex-direction: column;
+    height: auto;
+    min-height: 100svh;
+    overflow: auto;
+  }
+
+  .canvas-area {
+    flex: none;
+    width: 100%;
+  }
+
+  .digits-panel {
+    width: 100%;
+    border-left: none;
+    border-top: 1px solid var(--border);
+  }
+}
