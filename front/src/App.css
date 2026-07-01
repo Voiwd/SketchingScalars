@@ -71,6 +71,28 @@
   color: var(--text-bright);
 }
 
+.digit-item--predicted {
+  background: var(--primary);
+  border-color: var(--primary-strong);
+  color: white;
+  animation: predicted-grow 0.4s ease forwards;
+}
+
+@keyframes predicted-grow {
+  0% {
+    transform: scale(1);
+    box-shadow: none;
+  }
+  50% {
+    transform: scale(1.18);
+    box-shadow: 0 0 0 8px rgba(59, 130, 246, 0.12);
+  }
+  100% {
+    transform: scale(1.1);
+    box-shadow: 0 0 0 6px rgba(59, 130, 246, 0.1);
+  }
+}
+
 @media (max-width: 900px) {
   .app {
     flex-direction: column;

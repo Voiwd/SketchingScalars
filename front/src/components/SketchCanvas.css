@@ -9,9 +9,13 @@
   background: #ffffff;
 }
 
-.sketch-canvas-wrap .tl-container {
+.sketch-canvas {
+  display: block;
   width: 100%;
   height: 100%;
+  background: #ffffff;
+  touch-action: none;
+  cursor: crosshair;
 }
 
 .sketch-canvas-actions {

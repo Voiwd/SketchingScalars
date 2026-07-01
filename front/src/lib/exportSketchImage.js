@@ -1,33 +1,38 @@
-import { Box } from 'tldraw'
-
-export const SKETCH_PAGE_SIZE = 280
 export const EXPORT_PIXEL_SIZE = 28
 
 /**
- * Exporta o conteúdo do canvas como PNG 28×28 (formato MNIST).
+ * Exporta o conteúdo do canvas como PNG 28×28.
  *
- * @param {import('@tldraw/editor').Editor} editor
+ * @param {HTMLCanvasElement} canvas
  * @returns {Promise<{ blob: Blob, width: number, height: number, dataUrl: string }>}
  */
-export async function exportSketchImage(editor) {
-  const ids = [...editor.getCurrentPageShapeIds()]
+export async function exportSketchImage(canvas) {
+  const exportCanvas = document.createElement('canvas')
+  exportCanvas.width = EXPORT_PIXEL_SIZE
+  exportCanvas.height = EXPORT_PIXEL_SIZE
 
-  const { blob, width, height } = await editor.toImage(ids, {
-    format: 'png',
-    bounds: new Box(0, 0, SKETCH_PAGE_SIZE, SKETCH_PAGE_SIZE),
-    scale: EXPORT_PIXEL_SIZE / SKETCH_PAGE_SIZE,
-    pixelRatio: 1,
-    padding: 0,
-    background: true,
-    darkMode: false,
+  const context = exportCanvas.getContext('2d')
+  if (!context) {
+    throw new Error('Não foi possível criar o contexto do canvas de exportação.')
+  }
+
+  context.imageSmoothingEnabled = false
+  context.fillStyle = '#ffffff'
+  context.fillRect(0, 0, exportCanvas.width, exportCanvas.height)
+  context.drawImage(canvas, 0, 0, exportCanvas.width, exportCanvas.height)
+
+  const blob = await new Promise((resolve, reject) => {
+    exportCanvas.toBlob((value) => {
+      if (value) {
+        resolve(value)
+        return
+      }
+
+      reject(new Error('Falha ao criar a imagem exportada.'))
+    }, 'image/png')
   })
 
-  const dataUrl = await new Promise((resolve, reject) => {
-    const reader = new FileReader()
-    reader.onload = () => resolve(reader.result)
-    reader.onerror = reject
-    reader.readAsDataURL(blob)
-  })
+  const dataUrl = exportCanvas.toDataURL('image/png')
 
-  return { blob, width, height, dataUrl }
+  return { blob, width: EXPORT_PIXEL_SIZE, height: EXPORT_PIXEL_SIZE, dataUrl }
 }

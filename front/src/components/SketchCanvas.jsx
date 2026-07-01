@@ -1,153 +1,158 @@
-import { useCallback, useMemo, useRef, useState } from 'react'
-import {
-  DefaultColorStyle,
-  DefaultSizeStyle,
-  DefaultStylePanel,
-  StylePanelButtonPicker,
-  StylePanelSection,
-  StylePanelSizePicker,
-  Tldraw,
-  useStylePanelContext,
-  useTranslation,
-} from 'tldraw'
-import 'tldraw/tldraw.css'
-import { exportSketchImage, SKETCH_PAGE_SIZE } from '../lib/exportSketchImage'
+import { useCallback, useEffect, useRef, useState } from 'react'
+import { exportSketchImage } from '../lib/exportSketchImage'
 import './SketchCanvas.css'
 
-const MONO_COLORS = [
-  { value: 'black', icon: 'color' },
-  { value: 'white', icon: 'color' },
-]
+const CANVAS_SIZE = 280
+const BRUSH_SIZE = 24
+const API_ENDPOINT = 'http://127.0.0.1:8000/'
 
-const SKETCH_TOOLS = ['select', 'draw', 'eraser']
-
-const TLDRAW_OPTIONS = {
-  maxPages: 1,
-  createTextOnCanvasDoubleClick: false,
-  spacebarPanning: false,
-  rightClickPanning: false,
-  camera: {
-    isLocked: true,
-    wheelBehavior: 'none',
-    zoomSteps: [1],
-    panSpeed: 0,
-    zoomSpeed: 0,
-    constraints: {
-      bounds: { x: 0, y: 0, w: SKETCH_PAGE_SIZE, h: SKETCH_PAGE_SIZE },
-      padding: { x: 0, y: 0 },
-      origin: { x: 0.5, y: 0.5 },
-      initialZoom: 'fit-max-100',
-      baseZoom: 'fit-max-100',
-      behavior: 'fixed',
-    },
-  },
-}
-
-const TLDRAW_COMPONENTS = {
-  Minimap: null,
-  PageMenu: null,
-  NavigationPanel: null,
-  ZoomMenu: null,
-  HelpMenu: null,
-  MainMenu: null,
-  ActionsMenu: null,
-  QuickActions: null,
-  SharePanel: null,
-  MenuPanel: null,
-  StylePanel: SketchStylePanel,
-}
-
-const TLDRAW_OVERRIDES = {
-  tools(_editor, tools) {
-    return Object.fromEntries(
-      SKETCH_TOOLS.filter((id) => tools[id]).map((id) => [id, tools[id]]),
-    )
-  },
-}
-
-function MonoColorPicker() {
-  const { styles } = useStylePanelContext()
-  const msg = useTranslation()
-  const color = styles.get(DefaultColorStyle)
-
-  if (color === undefined) return null
-
-  return (
-    <StylePanelButtonPicker
-      title={msg('style-panel.color')}
-      uiType="color"
-      style={DefaultColorStyle}
-      items={MONO_COLORS}
-      value={color}
-    />
-  )
-}
-
-function SketchStylePanel(props) {
-  return (
-    <DefaultStylePanel {...props}>
-      <StylePanelSection>
-        <MonoColorPicker />
-        <StylePanelSizePicker />
-      </StylePanelSection>
-    </DefaultStylePanel>
-  )
-}
-
-function configureEditor(editor) {
-  editor.setCurrentTool('draw')
-  editor.setStyleForNextShapes(DefaultColorStyle, 'black')
-  editor.setStyleForNextShapes(DefaultSizeStyle, 'm')
-  editor.setCameraOptions(TLDRAW_OPTIONS.camera)
-  editor.setCamera(editor.getCamera(), { immediate: true })
-}
-
-export default function SketchCanvas() {
-  const editorRef = useRef(null)
+export default function SketchCanvas({ onPrediction }) {
+  const canvasRef = useRef(null)
+  const isDrawingRef = useRef(false)
   const [previewUrl, setPreviewUrl] = useState(null)
+  const [error, setError] = useState(null)
   const [isExporting, setIsExporting] = useState(false)
 
-  const handleMount = useCallback((editor) => {
-    editorRef.current = editor
-    configureEditor(editor)
+  const resizeCanvas = useCallback(() => {
+    const canvas = canvasRef.current
+    if (!canvas) return
+
+    const context = canvas.getContext('2d')
+    if (!context) return
+
+    canvas.width = CANVAS_SIZE
+    canvas.height = CANVAS_SIZE
+    context.fillStyle = '#ffffff'
+    context.fillRect(0, 0, canvas.width, canvas.height)
+    context.lineCap = 'round'
+    context.lineJoin = 'round'
+    context.strokeStyle = '#000000'
+    context.lineWidth = BRUSH_SIZE
+    context.globalAlpha = 0.95
+  }, [])
+
+  useEffect(() => {
+    resizeCanvas()
+  }, [resizeCanvas])
+
+  const getPoint = useCallback((event) => {
+    const canvas = canvasRef.current
+    if (!canvas) return null
+
+    const rect = canvas.getBoundingClientRect()
+    const scaleX = canvas.width / rect.width
+    const scaleY = canvas.height / rect.height
+
+    return {
+      x: (event.clientX - rect.left) * scaleX,
+      y: (event.clientY - rect.top) * scaleY,
+    }
+  }, [])
+
+  const startDrawing = useCallback(
+    (event) => {
+      event.preventDefault()
+      const point = getPoint(event)
+      if (!point) return
+
+      const context = canvasRef.current?.getContext('2d')
+      if (!context) return
+
+      isDrawingRef.current = true
+      event.currentTarget.setPointerCapture(event.pointerId)
+      context.beginPath()
+      context.moveTo(point.x, point.y)
+      context.lineTo(point.x, point.y)
+      context.stroke()
+      context.globalCompositeOperation = 'source-over'
+    },
+    [getPoint],
+  )
+
+  const draw = useCallback(
+    (event) => {
+      if (!isDrawingRef.current) return
+
+      const point = getPoint(event)
+      if (!point) return
+
+      const context = canvasRef.current?.getContext('2d')
+      if (!context) return
+
+      context.lineWidth = BRUSH_SIZE - 1
+      context.lineTo(point.x, point.y)
+      context.stroke()
+      context.lineWidth = BRUSH_SIZE
+    },
+    [getPoint],
+  )
+
+  const stopDrawing = useCallback(() => {
+    isDrawingRef.current = false
+    canvasRef.current?.getContext('2d')?.closePath()
+  }, [])
+
+  const uploadSketch = useCallback(async (blob) => {
+    const formData = new FormData()
+    formData.append('file', blob, 'sketch.png')
+
+    const response = await fetch(API_ENDPOINT, {
+      method: 'POST',
+      body: formData,
+    })
+
+    if (!response.ok) {
+      const text = await response.text()
+      throw new Error(text || 'Falha ao enviar a imagem para a API.')
+    }
+
+    const data = await response.json()
+    return data
   }, [])
 
   const handleExport = useCallback(async () => {
-    const editor = editorRef.current
-    if (!editor || isExporting) return
+    const canvas = canvasRef.current
+    if (!canvas || isExporting) return
 
     setIsExporting(true)
+    setError(null)
+
     try {
-      const { dataUrl } = await exportSketchImage(editor)
+      const { dataUrl, blob } = await exportSketchImage(canvas)
       setPreviewUrl(dataUrl)
+
+      const result = await uploadSketch(blob)
+      if (onPrediction) {
+        onPrediction(result.prediction)
+      }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Erro desconhecido ao enviar a imagem.')
     } finally {
       setIsExporting(false)
     }
-  }, [isExporting])
+  }, [isExporting, onPrediction, uploadSketch])
 
   const handleClear = useCallback(() => {
-    const editor = editorRef.current
-    if (!editor) return
-
-    const ids = [...editor.getCurrentPageShapeIds()]
-    if (ids.length > 0) {
-      editor.deleteShapes(ids)
-    }
+    resizeCanvas()
     setPreviewUrl(null)
-  }, [])
-
-  const options = useMemo(() => TLDRAW_OPTIONS, [])
-  const components = useMemo(() => TLDRAW_COMPONENTS, [])
-  const overrides = useMemo(() => TLDRAW_OVERRIDES, [])
+    setError(null)
+    if (onPrediction) {
+      onPrediction(null)
+    }
+  }, [onPrediction, resizeCanvas])
 
   return (
     <div className="sketch-canvas-wrap">
-      <Tldraw
-        colorScheme="light"
-        options={options}
-        components={components}
-        overrides={overrides}
-        onMount={handleMount}
+      <canvas
+        ref={canvasRef}
+        className="sketch-canvas"
+        width={CANVAS_SIZE}
+        height={CANVAS_SIZE}
+        onPointerDown={startDrawing}
+        onPointerMove={draw}
+        onPointerUp={stopDrawing}
+        onPointerLeave={stopDrawing}
+        onPointerCancel={stopDrawing}
       />
 
       <div className="sketch-canvas-actions">
@@ -162,6 +167,7 @@ export default function SketchCanvas() {
         >
           {isExporting ? 'Exportando…' : 'Exportar 28×28'}
         </button>
+
         {previewUrl && (
           <img
             src={previewUrl}
@@ -171,6 +177,8 @@ export default function SketchCanvas() {
             height={28}
           />
         )}
+
+        {error && <div className="sketch-error">{error}</div>}
       </div>
     </div>
   )
